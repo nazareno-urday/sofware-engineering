@@ -1171,6 +1171,7 @@ dependencies = [
     { name = "google-auth" },
     { name = "python-dotenv" },
     { name = "python-telegram-bot" },
+    { name = "requests" },
 ]
 
 [package.optional-dependencies]
@@ -1194,6 +1195,7 @@ requires-dist = [
     { name = "pytest-cov", marker = "extra == 'dev'" },
     { name = "python-dotenv" },
     { name = "python-telegram-bot" },
+    { name = "requests" },
     { name = "ruff", marker = "extra == 'dev'" },
 ]
 provides-extras = ["dev"]

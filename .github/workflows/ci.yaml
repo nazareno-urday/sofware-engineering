@@ -28,6 +28,7 @@ jobs:
 
       - name: Install dependencies
         run: uv sync --locked --extra dev --python 3.12
+        run: uv lock
 
       - name: Lint
         run: uv run --no-sync ruff check .
