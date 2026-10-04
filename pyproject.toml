@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=77.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "software-engineering"
+version = "0.1.0"
+description = "A simple business manager."
+readme = "README.md"
+requires-python = ">=3.12"
+
+dependencies = [
+    "python-telegram-bot",
+    "google-api-python-client",
+    "google-auth",
+    "python-dotenv"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-cov",
+    "ruff",
+    "black",
+    "mypy",
+    "bandit"
+]
+
+[tool.ruff]
+line-length = 65
+
+[tool.black]
+line-length = 65
+
+[tool.mypy]
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+
+[tool.bandit]
+exclude_dirs = [".venv", "__pycache__", "build", "dist"]
+skips = ["B101"]
+
+[tool.pytest.ini_options]
+addopts = "-rA -s -v"
+
+[tool.setuptools.packages.find]
+where = ["source"]
