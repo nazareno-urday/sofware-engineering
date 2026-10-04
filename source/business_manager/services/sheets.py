@@ -14,9 +14,7 @@ CREDENTIALS_FILE = PROJECT_ROOT / "credentials.json"
 
 credentials = Credentials.from_service_account_file(
     CREDENTIALS_FILE,
-    scopes=[
-        "https://www.googleapis.com/auth/spreadsheets"
-    ],
+    scopes=["https://www.googleapis.com/auth/spreadsheets"],
 )
 
 credentials.refresh(Request())
