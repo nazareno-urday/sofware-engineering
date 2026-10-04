@@ -7,4 +7,3 @@ Dependencies are managed with uv.
 GitHub Actions runs linting, formatting, type checks,
 security checks, and automated tests.
 killing me softly with his song
-hola gente
