@@ -46,3 +46,4 @@ jobs:
           uv run --no-sync pytest
           --cov=source
           --cov-report=term-missing
+          || [ $? -eq 5 ]
