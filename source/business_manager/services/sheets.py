@@ -5,7 +5,8 @@ import requests
 from google.auth.transport.requests import Request
 from google.oauth2.service_account import Credentials
 
-def get_urls(urls,headers):
+
+def get_urls(urls, headers):
     for url in urls:
         try:
             response = requests.get(
@@ -39,6 +40,7 @@ def get_urls(urls,headers):
 
         except requests.exceptions.RequestException as error:
             print(f"Error de conexión: {error}")
+
 
 # Global variables
 SHEET_ID = "1D7v4Tdd8ktjq5vAMdh831MZx6EjsvFu1_VT2Bu3yaTI"
