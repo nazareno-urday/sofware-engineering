@@ -6,7 +6,7 @@ from google.auth.transport.requests import Request
 from google.oauth2.service_account import Credentials
 
 
-def get_urls(urls, headers):
+def get_urls(urls, headers, reader):
     for url in urls:
         try:
             response = requests.get(
@@ -25,6 +25,7 @@ def get_urls(urls, headers):
                     indent=4,
                 )
             )
+            reader.append(data)
 
         except requests.exceptions.Timeout as error:
             print(f"Tiempo de espera agotado: {error}")
@@ -78,3 +79,5 @@ headers = {
     "Authorization": f"Bearer {credentials.token}",
     "Accept": "application/json",
 }
+
+reader: list = []
