@@ -13,7 +13,8 @@ dependencies = [
     "python-telegram-bot",
     "google-api-python-client",
     "google-auth",
-    "python-dotenv"
+    "python-dotenv",
+    "requests"
 ]
 
 [project.optional-dependencies]
