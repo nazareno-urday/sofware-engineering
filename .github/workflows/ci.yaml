@@ -1,0 +1,48 @@
+name: CI
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v10.1.0
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --locked --extra dev
+
+      - name: Lint
+        run: uv run --no-sync ruff check .
+
+      - name: Check formatting
+        run: uv run --no-sync black --check .
+
+      - name: Check types
+        run: uv run --no-sync mypy source
+
+      - name: Security checks
+        run: uv run --no-sync bandit -c pyproject.toml -r source
+
+      - name: Run tests
+        run: >
+          uv run --no-sync pytest
+          --cov=source
+          --cov-report=term-missing
