@@ -9,6 +9,7 @@ from google.oauth2.service_account import Credentials
 SHEET_ID = "1D7v4Tdd8ktjq5vAMdh831MZx6EjsvFu1_VT2Bu3yaTI"
 INGRESOS_RANGE = "Ingresos!A2:C500"
 EGRESOS_RANGE = "Egresos!A2:C500"
+HISTORIAL_RANGE = "Historial!A2:C500"
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 CREDENTIALS_FILE = PROJECT_ROOT / "credentials.json"
 
@@ -29,7 +30,12 @@ url_egresos = (
     f"{SHEET_ID}/values/{EGRESOS_RANGE}"
 )
 
-urls = [url_ingresos, url_egresos]
+url_historial = (
+    "https://sheets.googleapis.com/v4/spreadsheets/"
+    f"{SHEET_ID}/values/{HISTORIAL_RANGE}"
+)
+
+urls = [url_ingresos, url_egresos, url_historial]
 
 headers = {
     "Authorization": f"Bearer {credentials.token}",
