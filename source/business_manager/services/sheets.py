@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import quote
 
@@ -50,7 +50,9 @@ def guardar_ingresos(ingresos: dict) -> int:
     if not filas:
         return 0
 
-    fecha = date.today().strftime("%d/%m/%Y")
+    argentina_timezone = timezone(timedelta(hours=-3))
+    fecha = datetime.now(argentina_timezone).strftime("%d/%m/%Y")
+
     filas_con_fecha = [[fecha, *fila] for fila in filas]
 
     rango = quote(REGISTRO_INGRESOS_RANGE, safe="")
