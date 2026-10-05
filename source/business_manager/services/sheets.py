@@ -86,6 +86,50 @@ def guardar_ingresos(ingresos: dict) -> int:
     return int(data["updates"]["updatedRows"])
 
 
+def save_day_summary(results: dict[str, float]) -> int:
+    argentina_timezone = timezone(timedelta(hours=-3))
+    closing_date = datetime.now(argentina_timezone).strftime(
+        "%d/%m/%Y"
+    )
+
+    row = [
+        closing_date,
+        results["total_ingresos"],
+        results["ingresos_mp"],
+        results["ingresos_efectivo"],
+        results["total_egresos"],
+    ]
+
+    encoded_range = quote("Historial!A1:E", safe="")
+
+    url = (
+        "https://sheets.googleapis.com/v4/spreadsheets/"
+        f"{SHEET_ID}/values/{encoded_range}:append"
+    )
+
+    if not credentials.valid:
+        credentials.refresh(Request())
+        headers["Authorization"] = f"Bearer {credentials.token}"
+
+    response = requests.post(
+        url,
+        headers=headers,
+        params={
+            "valueInputOption": "RAW",
+            "insertDataOption": "INSERT_ROWS",
+        },
+        json={
+            "majorDimension": "ROWS",
+            "values": [row],
+        },
+        timeout=10,
+    )
+
+    response.raise_for_status()
+
+    data = response.json()
+    return int(data["updates"]["updatedRows"])
+
 # Global variables
 SHEET_ID = "1D7v4Tdd8ktjq5vAMdh831MZx6EjsvFu1_VT2Bu3yaTI"
 
