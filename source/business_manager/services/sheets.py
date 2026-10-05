@@ -1,171 +1,228 @@
-from datetime import datetime, timedelta, timezone
-from pathlib import Path
+﻿from pathlib import Path
+from threading import RLock
+from typing import Any
 from urllib.parse import quote
 
-import requests
-from google.auth.transport.requests import Request
+from google.auth.transport.requests import AuthorizedSession
 from google.oauth2.service_account import Credentials
 
+from business_manager.services.calculations import normalize_rows
 
-def get_urls() -> list[dict]:
-    reader: list[dict] = []
+DAILY_RANGES = {
+    "Ingresos": "Ingresos!A2:C500",
+    "Egresos": "Egresos!A2:C500",
+}
+ARCHIVE_RANGES = {
+    "history": "Historial!A2:E",
+    "sales": "'Registro ingresos'!A2:D",
+    "expenses": "'Registro ingresos'!F2:I",
+}
+HEADERS = {
+    "Ingresos!A1:C1": ["Producto", "Mercado Pago", "Efectivo"],
+    "Egresos!A1:C1": ["Egreso", "Mercado Pago", "Efectivo"],
+    "Historial!A1:E1": [
+        "Fecha",
+        "Total",
+        "Total Mercado Pago",
+        "Total efectivo",
+        "Total egresos",
+    ],
+    "'Registro ingresos'!A1:D1": [
+        "Fecha",
+        "Producto",
+        "Mercado Pago",
+        "Efectivo",
+    ],
+    "'Registro ingresos'!F1:I1": [
+        "Fecha",
+        "Egreso",
+        "Mercado Pago",
+        "Efectivo",
+    ],
+}
 
-    if not credentials.valid:
-        credentials.refresh(Request())
-        headers["Authorization"] = f"Bearer {credentials.token}"
 
-    for url in urls:
-        try:
-            response = requests.get(
-                url,
-                headers=headers,
-                timeout=10,
+class SheetConflict(RuntimeError):
+    pass
+
+
+class SheetsClient:
+    def __init__(
+        self,
+        sheet_id: str,
+        credentials_file: Path,
+        session: Any = None,
+    ) -> None:
+        self.sheet_id = sheet_id
+        self.credentials_file = credentials_file
+        self._session = session
+        self.lock = RLock()
+        self.base_url = (
+            "https://sheets.googleapis.com/v4/spreadsheets/"
+            + sheet_id
+        )
+
+    def _request(
+        self, method: str, suffix: str, **kwargs: Any
+    ) -> dict[str, Any]:
+        with self.lock:
+            if self._session is None:
+                credentials = Credentials.from_service_account_file(
+                    str(self.credentials_file),
+                    scopes=[
+                        "https://www.googleapis.com/auth/spreadsheets"
+                    ],
+                )
+                self._session = AuthorizedSession(credentials)
+            response = self._session.request(
+                method,
+                self.base_url + suffix,
+                timeout=15,
+                **kwargs,
             )
             response.raise_for_status()
+            result: dict[str, Any] = response.json()
+            return result
 
-            data = response.json()
-            reader.append(data)
+    def read(self, cell_range: str) -> list[list[Any]]:
+        data = self._request(
+            "GET",
+            "/values/" + quote(cell_range, safe=""),
+            params={
+                "valueRenderOption": "UNFORMATTED_VALUE",
+                "dateTimeRenderOption": "FORMATTED_STRING",
+            },
+        )
+        return list(data.get("values", []))
 
-        except requests.exceptions.Timeout as error:
-            print(f"TIMEOUT: {error}")
+    def write(
+        self, cell_range: str, rows: list[list[Any]]
+    ) -> None:
+        self._request(
+            "PUT",
+            "/values/" + quote(cell_range, safe=""),
+            params={"valueInputOption": "RAW"},
+            json={"majorDimension": "ROWS", "values": rows},
+        )
 
-        except requests.exceptions.HTTPError as error:
-            print(f"Error HTTP: {error}")
+    def read_daily(self) -> dict[str, list[list[Any]]]:
+        with self.lock:
+            daily = {}
+            for name, cell_range in DAILY_RANGES.items():
+                rows = self.read(cell_range)
+                daily[name] = normalize_rows(rows)
+            return daily
 
-            if error.response is not None:
-                print(error.response.text[:200])
+    def read_archive(self, kind: str) -> list[list[Any]]:
+        with self.lock:
+            return self.read(ARCHIVE_RANGES[kind])
 
-        except requests.exceptions.JSONDecodeError as error:
-            print(f"Invalid JSON response: {error}")
+    def check_layout(self) -> None:
+        with self.lock:
+            metadata = self._request(
+                "GET", "", params={"fields": "sheets.properties"}
+            )
+            titles = {
+                item["properties"]["title"]
+                for item in metadata["sheets"]
+            }
+            if titles != {
+                "Ingresos",
+                "Egresos",
+                "Historial",
+                "Registro ingresos",
+            }:
+                raise SheetConflict(
+                    "Expected exactly four sheets"
+                )
+            for cell_range, expected in HEADERS.items():
+                actual = normalize_rows(
+                    self.read(cell_range), len(expected)
+                )
+                if actual != [expected]:
+                    raise SheetConflict(
+                        f"Header mismatch: {cell_range}"
+                    )
+            if normalize_rows(
+                self.read("'Registro ingresos'!E:E"), 1
+            ):
+                raise SheetConflict("Column E must be empty")
 
-        except requests.exceptions.RequestException as error:
-            print(f"Connection error: {error}")
+    def reserve_range(self, kind: str, count: int) -> str:
+        existing = self.read_archive(kind)
+        start = len(existing) + 2
+        prefix, columns = ARCHIVE_RANGES[kind].split("!")
+        first = columns[0]
+        last = columns[-1]
+        return (
+            f"{prefix}!{first}{start}:{last}{start + count - 1}"
+        )
 
-    return reader
+    def ensure_rows(self, cell_range: str) -> None:
+        title, coordinates = cell_range.split("!")
+        title = title.strip("'")
+        last_cell = coordinates.split(":")[-1]
+        end = int(last_cell.lstrip("ABCDEFGHIJKLMNOPQRSTUVWXYZ"))
+        metadata = self._request(
+            "GET", "", params={"fields": "sheets.properties"}
+        )
+        properties = None
+        for sheet in metadata["sheets"]:
+            if sheet["properties"]["title"] == title:
+                properties = sheet["properties"]
+                break
+        if properties is None:
+            raise SheetConflict(f"Missing sheet: {title}")
+        current = properties["gridProperties"]["rowCount"]
+        if end > current:
+            self._request(
+                "POST",
+                ":batchUpdate",
+                json={
+                    "requests": [
+                        {
+                            "appendDimension": {
+                                "sheetId": properties["sheetId"],
+                                "dimension": "ROWS",
+                                "length": end - current,
+                            }
+                        }
+                    ]
+                },
+            )
 
+    def write_verified(
+        self, cell_range: str, rows: list[list[Any]]
+    ) -> None:
+        with self.lock:
+            width = len(rows[0])
+            self.ensure_rows(cell_range)
+            actual = normalize_rows(self.read(cell_range), width)
+            expected = normalize_rows(rows, width)
+            if actual == expected:
+                return
+            for index, row in enumerate(actual):
+                for column, value in enumerate(row):
+                    if value != "" and (
+                        index >= len(expected)
+                        or value != expected[index][column]
+                    ):
+                        raise SheetConflict(
+                            f"Archive conflict: {cell_range}"
+                        )
+            self.write(cell_range, rows)
+            if (
+                normalize_rows(self.read(cell_range), width)
+                != expected
+            ):
+                raise SheetConflict(
+                    f"Archive verification failed: {cell_range}"
+                )
 
-def guardar_ingresos(ingresos: dict) -> int:
-    filas = ingresos.get("values", [])
-
-    if not filas:
-        return 0
-
-    argentina_timezone = timezone(timedelta(hours=-3))
-    fecha = datetime.now(argentina_timezone).strftime("%d/%m/%Y")
-
-    filas_con_fecha = [[fecha, *fila] for fila in filas]
-
-    rango = quote(REGISTRO_INGRESOS_RANGE, safe="")
-
-    url = (
-        "https://sheets.googleapis.com/v4/spreadsheets/"
-        f"{SHEET_ID}/values/{rango}:append"
-    )
-
-    if not credentials.valid:
-        credentials.refresh(Request())
-        headers["Authorization"] = f"Bearer {credentials.token}"
-
-    response = requests.post(
-        url,
-        headers=headers,
-        params={
-            "valueInputOption": "RAW",
-            "insertDataOption": "INSERT_ROWS",
-        },
-        json={
-            "majorDimension": "ROWS",
-            "values": filas_con_fecha,
-        },
-        timeout=10,
-    )
-
-    response.raise_for_status()
-
-    data = response.json()
-    return int(data["updates"]["updatedRows"])
-
-
-def save_day_summary(results: dict[str, float]) -> int:
-    argentina_timezone = timezone(timedelta(hours=-3))
-    closing_date = datetime.now(argentina_timezone).strftime(
-        "%d/%m/%Y"
-    )
-
-    row = [
-        closing_date,
-        results["total_ingresos"],
-        results["ingresos_mp"],
-        results["ingresos_efectivo"],
-        results["total_egresos"],
-    ]
-
-    encoded_range = quote("Historial!A1:E", safe="")
-
-    url = (
-        "https://sheets.googleapis.com/v4/spreadsheets/"
-        f"{SHEET_ID}/values/{encoded_range}:append"
-    )
-
-    if not credentials.valid:
-        credentials.refresh(Request())
-        headers["Authorization"] = f"Bearer {credentials.token}"
-
-    response = requests.post(
-        url,
-        headers=headers,
-        params={
-            "valueInputOption": "RAW",
-            "insertDataOption": "INSERT_ROWS",
-        },
-        json={
-            "majorDimension": "ROWS",
-            "values": [row],
-        },
-        timeout=10,
-    )
-
-    response.raise_for_status()
-
-    data = response.json()
-    return int(data["updates"]["updatedRows"])
-
-# Global variables
-SHEET_ID = "1D7v4Tdd8ktjq5vAMdh831MZx6EjsvFu1_VT2Bu3yaTI"
-
-INGRESOS_RANGE = "Ingresos!A2:C500"
-EGRESOS_RANGE = "Egresos!A2:C500"
-HISTORIAL_RANGE = "Historial!A2:E500"
-REGISTRO_INGRESOS_RANGE = "'Registro ingresos'!A1:D"
-
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
-CREDENTIALS_FILE = PROJECT_ROOT / "credentials.json"
-
-credentials = Credentials.from_service_account_file(
-    CREDENTIALS_FILE,
-    scopes=["https://www.googleapis.com/auth/spreadsheets"],
-)
-
-credentials.refresh(Request())
-
-url_ingresos = (
-    "https://sheets.googleapis.com/v4/spreadsheets/"
-    f"{SHEET_ID}/values/{INGRESOS_RANGE}"
-)
-
-url_egresos = (
-    "https://sheets.googleapis.com/v4/spreadsheets/"
-    f"{SHEET_ID}/values/{EGRESOS_RANGE}"
-)
-
-url_historial = (
-    "https://sheets.googleapis.com/v4/spreadsheets/"
-    f"{SHEET_ID}/values/{HISTORIAL_RANGE}"
-)
-
-urls = [url_ingresos, url_egresos, url_historial]
-
-headers = {
-    "Authorization": f"Bearer {credentials.token}",
-    "Accept": "application/json",
-}
+    def clear_rows(self, ranges: list[str]) -> None:
+        if ranges:
+            self._request(
+                "POST",
+                "/values:batchClear",
+                json={"ranges": ranges},
+            )
