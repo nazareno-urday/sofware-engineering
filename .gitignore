@@ -1,6 +1,9 @@
 # Environment variables / secrets
 .env
 credentials.json
+.state/
+.state-test/
+*.pdf
 
 # Virtual environment
 .venv/
