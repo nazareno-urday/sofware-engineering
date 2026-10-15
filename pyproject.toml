@@ -12,23 +12,23 @@ requires-python = ">=3.12"
 dependencies = [
     "python-telegram-bot[job-queue]>=22,<23",
     "google-auth",
-    "python-dotenv",
+    "python-dotenv", # variables de .env
     "requests",
-    "reportlab>=4,<5",
-    "tzdata",
-    "filelock"
+    "reportlab>=4,<5", # generar PDF
+    "tzdata", # Zona horaria
+    "filelock" # Coordinacion de accesos
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest",
-    "pytest-cov",
+    "pytest-cov", # Medicion cobertura
     "ruff",
     "black",
-    "mypy",
+    "mypy", # Tipado estatico
     "bandit",
-    "types-requests",
-    "pypdf"
+    "types-requests", # Tipado estatico para requests
+    "pypdf" # Manipulacion de PDFS
 ]
 
 [tool.ruff]
@@ -39,19 +39,19 @@ line-length = 65
 target-version = ["py312"]
 
 [tool.mypy]
-warn_return_any = true
+warn_return_any = true # Funcion que trae any
 warn_unused_configs = true
 ignore_missing_imports = true
 
 [tool.bandit]
-exclude_dirs = [".venv", "__pycache__", "build", "dist"]
-skips = ["B101"]
+exclude_dirs = [".venv", "__pycache__", "build", "dist"] # Bandit ignora
+skips = ["B101"] # Advertencia B101 desactivada
 
 [tool.pytest.ini_options]
-addopts = "-rA -s -v"
+addopts = "-rA -s -v" # Resumen y VERBOSE
 
 [project.scripts]
-business-manager = "business_manager.main:main"
+business-manager = "business_manager.main:main" # Llamada a la f. main en main
 
 [tool.setuptools.packages.find]
-where = ["source"]
+where = ["source"] # Donde estan los paquetes
