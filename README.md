@@ -1,4 +1,4 @@
-# Business Manager
+# Business Manager (Manager)
 
 Proyecto de Ingeniería de Software 2 para un negocio de ferias.
 El bot de Telegram permite manejar la jornada y consultar reportes.
