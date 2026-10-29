@@ -8,7 +8,7 @@ from business_manager.services.calculations import (
 
 def test_real_business_example():
     result = calculate_day(
-        [["laureano", 1000, 2000], ["comida", 8000, 7000]],
+        [["Materiales", 1000, 2000], ["comida", 8000, 7000]],
         [["coca", 2000, 900]],
     )
     assert result == {
