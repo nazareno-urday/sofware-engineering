@@ -313,3 +313,4 @@ Fuera de 00:00, este ensayo cierra la fecha actual.
 Al terminar, detener el bot de prueba y restaurar CLOSE_TIME=00:00,
 el ID de la hoja real, el token original y STATE_DIR=.state.
 No reemplazar el estado real con el de pruebas.
+otro cambio mas en el read me
